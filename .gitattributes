@@ -1,0 +1,34 @@
+# Normalize every text file to LF, in the repository and in the working tree.
+# Without the eol=lf half, Windows checkouts get CRLF and Git prints a
+# "LF will be replaced by CRLF" warning on every add. Node, Next.js, Prettier
+# and ESLint are all happy with LF on Windows, so there is no reason to differ.
+* text=auto eol=lf
+
+# Scripts whose interpreter cares about the ending, regardless of platform.
+*.sh   text eol=lf
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Binary assets: never normalized, never diffed as text.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.mp4  binary
+*.webm binary
+*.mp3  binary
+*.wav  binary
+*.woff  binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
+*.pdf  binary
+
+# Generated; keep it out of diffs and out of GitHub's language stats.
+package-lock.json linguist-generated=true -diff
+
+# Portfolio media is documentation, not source.
+docs/** linguist-documentation
