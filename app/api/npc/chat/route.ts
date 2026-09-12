@@ -111,13 +111,39 @@ export async function POST(request: Request): Promise<Response> {
       system: `${npc.systemPrompt}\n\n${buildContext(body)}`,
       messages: [...recent, { role: "user", content: playerMessage }],
       maxOutputTokens: 300,
-      onError: (error) => {
-        console.error(`[npc/chat] stream error for ${npcId}`, error);
+    });
+
+    // streamText() never throws for a failed provider call — the request only
+    // rejects once the stream is actually consumed. Doing that ourselves,
+    // instead of handing result.textStream straight to toTextStreamResponse(),
+    // means a failure here still lands in the fallback line below rather than
+    // shipping a 200 with an empty body.
+    const encoder = new TextEncoder();
+    let sentAny = false;
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          for await (const delta of result.textStream) {
+            sentAny = true;
+            controller.enqueue(encoder.encode(delta));
+          }
+        } catch (error) {
+          console.error(`[npc/chat] stream error for ${npcId}`, error);
+          if (!sentAny) {
+            controller.enqueue(encoder.encode(getFallbackDialogue(npcId, turn)));
+          }
+        } finally {
+          controller.close();
+        }
       },
     });
 
-    return result.toTextStreamResponse({
-      headers: { "X-Dialogue-Source": "model" },
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Dialogue-Source": "model",
+      },
     });
   } catch (error) {
     console.error(`[npc/chat] request failed for ${npcId}`, error);

@@ -22,10 +22,10 @@ import { google } from "@ai-sdk/google";
 const API_KEY_ENV = "GOOGLE_GENERATIVE_AI_API_KEY";
 
 /** Drives NPC dialogue. */
-export const dialogueModel = google("gemini-2.5-flash");
+export const dialogueModel = google("gemini-3.6-flash");
 
 /** Scores trust and suspicion deltas after each exchange. */
-export const evaluatorModel = google("gemini-2.5-flash-lite");
+export const evaluatorModel = google("gemini-3.5-flash-lite");
 
 /** How many prior turns to replay as context. */
 export const HISTORY_WINDOW = 10;
