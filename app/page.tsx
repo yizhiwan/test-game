@@ -166,7 +166,7 @@ export default function TitleScreen() {
       </div>
 
       <footer className="relative z-10 mt-10 text-[9px] uppercase tracking-[0.4em] text-white/25">
-        v1.0 // Anthropic-Powered
+        v1.0 // Gemini-Powered
       </footer>
     </main>
   );
