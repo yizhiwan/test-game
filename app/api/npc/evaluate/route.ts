@@ -8,11 +8,10 @@
  * waved at the wrong suspect.
  */
 
-import { anthropic } from "@ai-sdk/anthropic";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { EVIDENCE, NPC_ROSTER, isNPCId } from "@/lib/caseData";
-import { EVALUATOR_MODEL } from "@/lib/models";
+import { evaluatorModel, hasApiKey } from "@/lib/models";
 import type { Evaluation, EvidenceId, NPCId } from "@/lib/types";
 
 export const runtime = "edge";
@@ -128,7 +127,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // Without a key the hard rules still carry the critical path.
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!hasApiKey()) {
     return Response.json(applyHardRules(NEUTRAL, npcId, presentedEvidence));
   }
 
@@ -153,7 +152,7 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const { object } = await generateObject({
-      model: anthropic(EVALUATOR_MODEL),
+      model: evaluatorModel,
       schema: evaluationSchema,
       system: EVALUATOR_SYSTEM,
       prompt,

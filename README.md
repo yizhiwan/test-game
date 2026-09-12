@@ -10,7 +10,7 @@
   <img alt="React" src="https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=black" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white" />
   <img alt="Tailwind" src="https://img.shields.io/badge/Tailwind-3-06b6d4?logo=tailwindcss&logoColor=white" />
-  <img alt="Claude" src="https://img.shields.io/badge/Claude-Anthropic-D97757" />
+  <img alt="Gemini" src="https://img.shields.io/badge/Gemini-Google-4285F4?logo=googlegemini&logoColor=white" />
 </p>
 
 ![Gameplay](docs/media/gameplay.gif)
@@ -50,8 +50,9 @@ endings.
 
 ## Playing with live AI dialogue
 
-To have the suspects actually respond to whatever you type, add an
-[Anthropic API key](https://console.anthropic.com/settings/keys):
+To have the suspects actually respond to whatever you type, add a free
+[Google Gemini API key](https://aistudio.google.com/apikey) — no credit card
+needed:
 
 ```bash
 cp .env.example .env.local
@@ -60,11 +61,15 @@ cp .env.example .env.local
 Edit `.env.local`:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...
+GOOGLE_GENERATIVE_AI_API_KEY=...
 ```
 
-Restart `npm run dev`. Dialogue now streams from Claude, and a second,
+Restart `npm run dev`. Dialogue now streams from Gemini, and a second,
 cheaper model scores each exchange to move trust and suspicion.
+
+The provider is isolated to [`lib/models.ts`](lib/models.ts) — the API routes
+never import it directly, so swapping to Anthropic, Groq, or a local Ollama
+server is a matter of changing that one file.
 
 ## How to play
 
@@ -97,7 +102,7 @@ Running it out ends the case on its own.
 | Styling | Tailwind CSS 3, custom CRT/neon effects in plain CSS |
 | State | Zustand, three stores, each persisted to `localStorage` |
 | Motion | Framer Motion for interaction, CSS for anything that gates visibility |
-| AI | Vercel AI SDK v7 + Anthropic Claude — one model for dialogue, a cheaper one for scoring |
+| AI | Vercel AI SDK v7 + Google Gemini (free tier) — one model for dialogue, a cheaper one for scoring |
 | Audio | Howler, with a WebAudio synth fallback when no audio files are present |
 | Mobile shell | Capacitor, for an Android build of the static export |
 

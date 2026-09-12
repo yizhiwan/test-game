@@ -10,11 +10,10 @@
  * because the run is on a clock and a dead character reads as a bug.
  */
 
-import { anthropic } from "@ai-sdk/anthropic";
 import { streamText, type ModelMessage } from "ai";
 import { EVIDENCE, NPC_ROSTER, isNPCId } from "@/lib/caseData";
 import { getFallbackDialogue } from "@/lib/fallbackDialogues";
-import { DIALOGUE_MODEL, HISTORY_WINDOW } from "@/lib/models";
+import { dialogueModel, hasApiKey, HISTORY_WINDOW } from "@/lib/models";
 import type { ChatMessage, EvidenceId, NPCId } from "@/lib/types";
 
 export const runtime = "edge";
@@ -94,7 +93,7 @@ export async function POST(request: Request): Promise<Response> {
   const turn = history.filter((m) => m.role === "player").length;
 
   // No key means no point attempting the call; go straight to the canned line.
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!hasApiKey()) {
     return textStream(getFallbackDialogue(npcId, turn));
   }
 
@@ -107,7 +106,7 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const result = streamText({
-      model: anthropic(DIALOGUE_MODEL),
+      model: dialogueModel,
       // Persona first and unchanged, dynamic state second.
       system: `${npc.systemPrompt}\n\n${buildContext(body)}`,
       messages: [...recent, { role: "user", content: playerMessage }],

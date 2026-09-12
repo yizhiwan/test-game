@@ -6,7 +6,7 @@ interrogation is genuinely open-ended: you type whatever you want, and a second
 model scores what the exchange did to their trust and their suspicion of you.
 
 **Stack:** Next.js 15 (App Router) · React 19 · TypeScript · Tailwind 3 ·
-Zustand · Framer Motion · Vercel AI SDK v7 · Anthropic Claude · Capacitor
+Zustand · Framer Motion · Vercel AI SDK v7 · Google Gemini · Capacitor
 
 ---
 
@@ -205,12 +205,18 @@ npm install
 npm run dev
 ```
 
-Live dialogue needs an Anthropic API key in `.env.local`. Without one the game
-is still fully playable on the fallback path.
+Live dialogue needs a free Gemini API key in `.env.local` — get one at
+[aistudio.google.com/apikey](https://aistudio.google.com/apikey), no card
+required. Without one the game is still fully playable on the fallback path.
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...
+GOOGLE_GENERATIVE_AI_API_KEY=...
 ```
+
+The provider lives entirely in [`lib/models.ts`](lib/models.ts); the two API
+routes only import the model instances it exports, never a provider package
+directly. Trying Anthropic, Groq, or a local Ollama server instead is a
+one-file change.
 
 Regenerate every screenshot and clip in this document. Run it against a
 production server, not the dev server, or the Next.js dev badge lands in the
