@@ -67,6 +67,82 @@ From here, branch into whichever ending you want to show.
 
 ---
 
+## What to ask each suspect
+
+Use this if you have more than the tight ten-minute version to fill — a
+longer demo slot, or questions from the room afterward where you want to keep
+poking at a suspect live instead of rushing to an ending.
+
+Everything below assumes **live mode** (a `GOOGLE_GENERATIVE_AI_API_KEY` set).
+In fallback mode the suspect's reply is a fixed rotation of lines that
+ignores whatever you type, and plain questions never move trust or
+suspicion — only presenting evidence does, through the hard-coded rules in
+[`app/api/npc/evaluate`](app/api/npc/evaluate/route.ts). If you're demoing
+without a key, skip this section and lean on the evidence beats instead.
+
+With a key, every line below is chosen to land on a specific rung of that
+suspect's trust ladder in [`lib/caseData.ts`](lib/caseData.ts), so the answer
+should visibly shift in tone as you move down each list.
+
+### Dr. Aris Wijaya — the killer
+
+Starts at trust 30, cold and clipped.
+
+| Ask | Shows off |
+| --- | --- |
+| *"I'm sorry for your loss. Were you close with Kenji?"* | A polite, empathetic question — a small, steady trust gain |
+| *"Walk me through your evening. Where were you at 9:40?"* | The rehearsed Server Room B alibi, word for word |
+| *"Can anyone actually confirm you were there the whole time?"* | Pressing the alibi with nothing to back it — a mild cost |
+| *"You killed him, didn't you?"* | A direct accusation with no proof — the single biggest trust hit in the game. Good bonus beat for what **not** to do |
+| *(after presenting the Encrypted Drive)* "What's in the Specimen 404 trial logs?" | His alibi is already gone; he gives up the falsification rather than the murder itself |
+| *"Did you kill him?"* | Only worth trying once trust is pushed well past 85 — the actual confession, and it needs sustained pressure plus the drive, not one lucky question |
+
+### Dr. Chen Ling — the witness
+
+Starts at trust 45, nervous, over-explains everything.
+
+| Ask | Shows off |
+| --- | --- |
+| *"This must be a lot to process. Are you doing okay?"* | Empathetic opener, trust ticks up |
+| *"Did you see anyone near Lab 404 around 9:40 PM?"* | She deflects — "I wasn't really watching" |
+| *(after presenting the Reflection Log)* "That's you in the stairwell, isn't it?" | She stops denying she was there, regardless of current trust |
+| *"Who did you see go in?"* | At high trust, she names Aris outright — a witness's confession, not the killer's |
+
+### KAI-7 — the security bot
+
+Starts at trust 50, flat and literal. Phrase things as records requests, not
+feelings — it responds to that register specifically.
+
+| Ask | Shows off |
+| --- | --- |
+| *"Do you have a log of who entered Lab 404 around 9:40 PM?"* | Releases the general timeline, badge IDs still redacted |
+| *"What happened to the camera feed?"* | Reveals the 09:46 PM wipe once trust clears 70 |
+| *(after presenting the Bloody Keycard)* "Cross-reference this against your door logs." | Confirms it's the same credential used at 09:40 and 09:46 — a records match, not an opinion |
+| *"Whose credential was it?"* | Above trust 85, gives up the name on the card |
+
+### NOVA — the ally
+
+Starts at trust 60, snarky, cannot be accused. Good comic relief between
+suspects.
+
+| Ask | Shows off |
+| --- | --- |
+| *"What should I be looking at?"* | A vague nudge if trust is still low |
+| *(after collecting the Encrypted Drive)* "Can you crack this?" | Decrypts it once trust clears 70, handing over the falsified logs and the ethics-board note |
+| *"Who do you think did it?"* | She refuses to name anyone, no matter how high trust climbs — the game enforcing that she's an ally, not an oracle |
+
+### Patterns worth calling out live
+
+- Polite, specific questions nudge trust up a little at a time. Vague or
+  repeated ones do nothing, or cost a little.
+- A direct accusation with no evidence in hand is the worst thing you can say
+  to any suspect — a bigger hit than an aggressive question.
+- Presenting evidence is the one action that can move a suspect several
+  points in a single turn, for better or worse, depending on whether it
+  actually implicates them.
+
+---
+
 ## The four endings
 
 ### 1 · WIN — Case Closed (correct conviction)
