@@ -22,11 +22,12 @@ function saveName(name: string): void {
 
 interface Props {
   connected: boolean;
+  dropped: boolean; // closed by the server for idling; no auto-reconnect
   notice: string;
   onClearNotice: () => void;
 }
 
-export function Home({ connected, notice, onClearNotice }: Props) {
+export function Home({ connected, dropped, notice, onClearNotice }: Props) {
   const [name, setName] = useState(loadName);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
@@ -115,7 +116,20 @@ export function Home({ connected, notice, onClearNotice }: Props) {
           </button>
         </form>
 
-        {!connected && <p className="status">Connecting to the surface relay…</p>}
+        {!connected &&
+          (dropped ? (
+            <button
+              className="btn"
+              onClick={() => {
+                onClearNotice();
+                socket.connect();
+              }}
+            >
+              Reconnect
+            </button>
+          ) : (
+            <p className="status">Connecting to the surface relay…</p>
+          ))}
         {(error || notice) && <p className="error">{error || notice}</p>}
       </section>
     </main>

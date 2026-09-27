@@ -23,6 +23,7 @@ export function App() {
 function Station() {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [connected, setConnected] = useState(socket.connected);
+  const [dropped, setDropped] = useState(false);
   const [notice, setNotice] = useState('');
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [introSeen, setIntroSeen] = useState(0);
@@ -30,12 +31,20 @@ function Station() {
   useEffect(() => {
     const onState = (s: RoomState) => setRoom(s);
     const onChat = (m: ChatMessage) => setChat((prev) => [...prev.slice(-99), m]);
-    const onConnect = () => setConnected(true);
+    const onConnect = () => {
+      setConnected(true);
+      setDropped(false);
+    };
     // The server drops us from the room on disconnect, so start over.
-    const onDisconnect = () => {
+    const onDisconnect = (reason: string) => {
       setConnected(false);
+      // Only the server's idle sweep disconnects on purpose, and Socket.IO
+      // won't retry that one: the player has to press Reconnect.
+      const idle = reason === 'io server disconnect';
+      setDropped(idle);
       setRoom((prev) => {
-        if (prev) setNotice('Lost connection to the station.');
+        if (idle) setNotice('You were idle, so the station link was closed.');
+        else if (prev) setNotice('Lost connection to the station.');
         return null;
       });
     };
@@ -77,6 +86,7 @@ function Station() {
         selfId={selfId}
         chat={chat}
         connected={connected}
+        dropped={dropped}
         notice={notice}
         introSeen={introSeen}
         onClearNotice={() => setNotice('')}
@@ -93,6 +103,7 @@ interface ScreenProps {
   selfId: string;
   chat: ChatMessage[];
   connected: boolean;
+  dropped: boolean;
   notice: string;
   introSeen: number;
   onClearNotice: () => void;
@@ -100,8 +111,8 @@ interface ScreenProps {
   onIntroDone: () => void;
 }
 
-function Screen({ room, selfId, chat, connected, notice, introSeen, onClearNotice, onLeave: leave, onIntroDone: finishIntro }: ScreenProps) {
-  if (!room) return <Home connected={connected} notice={notice} onClearNotice={onClearNotice} />;
+function Screen({ room, selfId, chat, connected, dropped, notice, introSeen, onClearNotice, onLeave: leave, onIntroDone: finishIntro }: ScreenProps) {
+  if (!room) return <Home connected={connected} dropped={dropped} notice={notice} onClearNotice={onClearNotice} />;
   switch (room.phase) {
     case 'lobby':
       return <Lobby room={room} selfId={selfId} onLeave={leave} />;

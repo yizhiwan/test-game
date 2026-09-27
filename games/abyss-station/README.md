@@ -134,9 +134,17 @@ src/       Vite + React screens (home, lobby, game) and a Canvas 2D renderer
 
 The `Dockerfile` builds one container that serves the client and the
 socket server. Rooms live in memory, so keep it on a single instance for
-now and turn on session affinity:
+now and turn on session affinity. Raise the request timeout too: Cloud Run
+cuts a socket at the timeout (5 min by default), and a reconnect is a new
+player, so a round would drop you mid-game.
 
 ```bash
 gcloud run deploy abyss-station --source . --max-instances 1 --session-affinity \
-  --set-env-vars GOOGLE_GENERATIVE_AI_API_KEY=your-key   # optional, for bot chat
+  --timeout 3600 \
+  --set-secrets GOOGLE_GENERATIVE_AI_API_KEY=GOOGLE_GENERATIVE_AI_API_KEY:latest   # optional, for bot chat
 ```
+
+Cloud Run bills while any socket is open, so the server closes sockets that
+have sent nothing for 10 minutes (`ABYSS_IDLE_MS` to change it). The client
+doesn't auto-reconnect after that; the title screen shows a **Reconnect**
+button. Without this, a tab left open would keep the instance running.
