@@ -45,6 +45,14 @@ export function Home({ connected, notice, onClearNotice }: Props) {
     socket.emit('room:create', { name }, handle);
   };
 
+  const solo = () => {
+    onClearNotice();
+    setError('');
+    if (name.trim()) saveName(name);
+    setBusy(true);
+    socket.emit('room:solo', { name }, handle);
+  };
+
   const join = (e: FormEvent) => {
     e.preventDefault();
     onClearNotice();
@@ -77,12 +85,21 @@ export function Home({ connected, notice, onClearNotice }: Props) {
           />
         </label>
 
-        <button className="btn primary" onClick={create} disabled={disabled}>
+        <button className="btn primary big" onClick={solo} disabled={!connected || busy}>
+          Play vs bots
+        </button>
+        <p className="hint center">Jump straight in with five AI divers. One of them is not what they seem.</p>
+
+        <div className="divider">
+          <span>or play with friends</span>
+        </div>
+
+        <button className="btn" onClick={create} disabled={disabled}>
           Host a new dive
         </button>
 
         <div className="divider">
-          <span>or join a crew</span>
+          <span>or join with a code</span>
         </div>
 
         <form className="join" onSubmit={join}>

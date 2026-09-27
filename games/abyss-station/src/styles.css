@@ -1052,3 +1052,13 @@ input:focus {
 .bot-controls .hint {
   flex: 1 1 180px;
 }
+
+/* ---- Play vs bots ---- */
+.btn.big {
+  padding: 16px 18px;
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+}
+.hint.center {
+  text-align: center;
+}
