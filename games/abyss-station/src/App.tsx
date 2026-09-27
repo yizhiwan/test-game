@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ChatMessage, RoomState } from '../shared/protocol';
 import { socket } from './socket';
-import { savedAccessCode, unlock } from './access';
+import { currentAccessCode, unlock } from './access';
 import { MuteButton } from './MuteButton';
 import { setMuted, isMuted } from './audio';
 import { useSoundCues } from './useSoundCues';
@@ -33,8 +33,8 @@ function Station() {
   useEffect(() => {
     const onState = (s: RoomState) => setRoom(s);
     const onChat = (m: ChatMessage) => setChat((prev) => [...prev.slice(-99), m]);
-    // Access is per connection, so every (re)connect re-sends the saved code.
-    const restoreAccess = () => unlock(savedAccessCode(), (error) => setTrusted(!error));
+    // Access is per connection, so a reconnect re-sends this page's code (if any).
+    const restoreAccess = () => unlock(currentAccessCode(), (error) => setTrusted(!error));
     const onConnect = () => {
       setConnected(true);
       setDropped(false);

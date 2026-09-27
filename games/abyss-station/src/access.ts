@@ -1,30 +1,28 @@
 import { socket } from './socket';
 
-// An invite code unlocks playing with friends and Gemini bot chat. It's
-// remembered per browser so friends only type it once; the server re-checks
-// it (with eonelabs.my) on every connection.
-const ACCESS_KEY = 'abyss.access';
+// An invite code unlocks playing with friends and Gemini bot chat. It's held
+// only in this page's memory, never saved, so every visit (and every shared
+// computer) starts locked; the same code works again until it's revoked. Within
+// the open page it's re-sent on reconnect, since access is per connection and
+// the server re-checks it (with eonelabs.my) every time.
+let pageCode = '';
 
-export function savedAccessCode(): string {
-  try {
-    return localStorage.getItem(ACCESS_KEY) ?? '';
-  } catch {
-    return '';
-  }
+// Codes used to be kept in localStorage; clear any left behind.
+try {
+  localStorage.removeItem('abyss.access');
+} catch {
+  // Storage blocked: nothing was saved there anyway.
 }
 
-function saveAccessCode(code: string): void {
-  try {
-    localStorage.setItem(ACCESS_KEY, code);
-  } catch {
-    // Storage blocked: they'll just have to enter it again next visit.
-  }
+/** The code unlocked in this page, or '' if none. */
+export function currentAccessCode(): string {
+  return pageCode;
 }
 
 /** Unlocks this connection. `done` gets an error message, or nothing on success. */
 export function unlock(code: string, done: (error?: string) => void): void {
   socket.emit('access:unlock', code, (r) => {
-    if (r.ok && code.trim()) saveAccessCode(code.trim());
+    if (r.ok && code.trim()) pageCode = code.trim();
     done(r.ok ? undefined : r.error);
   });
 }

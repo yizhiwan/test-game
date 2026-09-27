@@ -83,8 +83,10 @@ The full game is invite only, per friend:
 - **Anyone** can press **Play vs bots**, but in their rooms the bots use
   canned lines, so strangers never spend the Gemini key's quota. The title
   screen tells them to ask Ikhwan for a code for the full experience.
-- **Hosting or joining a room** needs an invite code. Friends enter it once;
-  the browser remembers it and re-sends it on every connection.
+- **Hosting or joining a room** needs an invite code, entered on every visit.
+  It's kept only in the open page's memory (re-sent on reconnect), never
+  saved, so a shared computer starts locked again once the tab is closed.
+  The same code keeps working until it's revoked or expires.
 - **Gemini bot chat** runs only while someone with a code is in the room.
 - Codes are created, labelled, expired and revoked per friend at
   `eonelabs.my/admin/ai-codes` (game: **Abyss Station**), separate from the
