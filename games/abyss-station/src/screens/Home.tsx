@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { NAME_MAX_LENGTH } from '../../shared/constants';
 import { socket } from '../socket';
 import { unlock } from '../access';
+import { track, type GameEvent } from '../analytics';
 
 const NAME_KEY = 'abyss.name';
 
@@ -44,6 +45,7 @@ export function Home({ connected, dropped, trusted, onUnlocked, notice, onClearN
     setBusy(true);
     unlock(access, (err) => {
       setBusy(false);
+      track(err ? 'invite_rejected' : 'invite_unlocked');
       if (err) setError(err);
       else {
         setAccess('');
@@ -52,9 +54,11 @@ export function Home({ connected, dropped, trusted, onUnlocked, notice, onClearN
     });
   };
 
-  const handle = (r: { ok: true } | { ok: false; error: string }) => {
+  // Counts only what actually started, not every click.
+  const handle = (event: GameEvent) => (r: { ok: true } | { ok: false; error: string }) => {
     setBusy(false);
-    if (!r.ok) setError(r.error);
+    if (r.ok) track(event);
+    else setError(r.error);
   };
 
   const create = () => {
@@ -62,7 +66,7 @@ export function Home({ connected, dropped, trusted, onUnlocked, notice, onClearN
     setError('');
     saveName(name);
     setBusy(true);
-    socket.emit('room:create', { name }, handle);
+    socket.emit('room:create', { name }, handle('host_room'));
   };
 
   const solo = () => {
@@ -70,7 +74,7 @@ export function Home({ connected, dropped, trusted, onUnlocked, notice, onClearN
     setError('');
     if (name.trim()) saveName(name);
     setBusy(true);
-    socket.emit('room:solo', { name }, handle);
+    socket.emit('room:solo', { name }, handle('play_vs_bots'));
   };
 
   const join = (e: FormEvent) => {
@@ -79,7 +83,7 @@ export function Home({ connected, dropped, trusted, onUnlocked, notice, onClearN
     setError('');
     saveName(name);
     setBusy(true);
-    socket.emit('room:join', { name, code }, handle);
+    socket.emit('room:join', { name, code }, handle('join_room'));
   };
 
   const disabled = !connected || busy || !name.trim();
