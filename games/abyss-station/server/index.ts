@@ -14,6 +14,7 @@ import { sanitizeInput } from '../shared/physics.js';
 import type { SabotageKind } from '../shared/sabotage.js';
 import { TASKS_PER_DIVER } from '../shared/tasks.js';
 import type { Ack, ClientToServer, JoinResult, ServerToClient } from '../shared/protocol.js';
+import { checkInvite, invitesRequired } from './invites.js';
 import { Room } from './room.js';
 
 // Local secrets (GOOGLE_GENERATIVE_AI_API_KEY) from .env, if present.
@@ -35,6 +36,11 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O: too easy to misr
 // send nothing for this long are dropped; the client doesn't auto-reconnect
 // after a server-side disconnect. Lower it to test, e.g. ABYSS_IDLE_MS=15000.
 const IDLE_MS = Math.max(10_000, Number(process.env.ABYSS_IDLE_MS) || 10 * 60_000);
+// Playing with friends and Gemini bot chat need an invite code (see
+// invites.ts); Play vs bots with canned lines stays public, so strangers never
+// spend the key's quota. This local limit sits in front of eonelabs.my's own.
+const UNLOCK_TRIES = 10; // wrong codes per client IP per window
+const UNLOCK_WINDOW_MS = 10 * 60_000;
 
 const app = express();
 const httpServer = createServer(app);
@@ -43,6 +49,34 @@ const io = new Server<ClientToServer, ServerToClient>(httpServer);
 const rooms = new Map<string, Room>();
 const roomOfSocket = new Map<string, string>();
 const lastActive = new Map<string, number>();
+const trusted = new Set<string>();
+const checking = new Set<string>(); // sockets with a code check in flight
+const checksByIp = new Map<string, number>(); // in-flight checks per client IP
+const MAX_CHECKS_PER_IP = 3;
+const unlockTries = new Map<string, { count: number; resetAt: number }>();
+
+const isTrusted = (id: string): boolean => !invitesRequired || trusted.has(id);
+
+// Cloud Run appends the real client IP to X-Forwarded-For, so take the last
+// entry; earlier ones are whatever the client sent.
+function clientIp(socket: Socket): string {
+  const fwd = socket.handshake.headers['x-forwarded-for'];
+  const last = (Array.isArray(fwd) ? fwd.join(',') : fwd ?? '').split(',').pop()?.trim();
+  return last || socket.handshake.address;
+}
+
+// Only wrong codes count, so friends on one home connection don't lock each other out.
+function unlockBlocked(ip: string): boolean {
+  const entry = unlockTries.get(ip);
+  if (entry && Date.now() >= entry.resetAt) unlockTries.delete(ip);
+  return (unlockTries.get(ip)?.count ?? 0) >= UNLOCK_TRIES;
+}
+
+function recordWrongCode(ip: string): void {
+  const entry = unlockTries.get(ip);
+  if (entry) entry.count++;
+  else unlockTries.set(ip, { count: 1, resetAt: Date.now() + UNLOCK_WINDOW_MS });
+}
 
 function newCode(): string {
   for (;;) {
@@ -68,7 +102,48 @@ function broadcastState(room: Room): void {
 io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
   lastActive.set(socket.id, Date.now());
   socket.onAny(() => lastActive.set(socket.id, Date.now()));
-  socket.on('disconnect', () => lastActive.delete(socket.id));
+  socket.on('disconnect', () => {
+    lastActive.delete(socket.id);
+    trusted.delete(socket.id);
+  });
+
+  socket.on('access:unlock', (raw, ack) => {
+    if (typeof ack !== 'function') return;
+    if (isTrusted(socket.id)) return ack({ ok: true });
+    // The client sends its saved code (maybe none) on every connect; an empty
+    // one isn't a guess, so it doesn't count against the limit.
+    if (!String(raw ?? '').trim()) return ack({ ok: false, error: 'Enter an invite code.' });
+    if (checking.has(socket.id)) return ack({ ok: false, error: 'Still checking your code…' });
+    const ip = clientIp(socket);
+    if (unlockBlocked(ip)) return ack({ ok: false, error: 'Too many tries. Wait a while and try again.' });
+    // Many sockets from one IP could otherwise fire checks in parallel before
+    // a single wrong code is counted.
+    const inFlight = checksByIp.get(ip) ?? 0;
+    if (inFlight >= MAX_CHECKS_PER_IP) return ack({ ok: false, error: 'Still checking your code…' });
+    checksByIp.set(ip, inFlight + 1);
+    checking.add(socket.id);
+    void checkInvite(String(raw), ip)
+      .then((r) => {
+        if (r.ok) {
+          if (socket.connected) trusted.add(socket.id);
+          return ack({ ok: true });
+        }
+        if (r.wrong) recordWrongCode(ip);
+        ack({ ok: false, error: r.error });
+      })
+      .finally(() => {
+        checking.delete(socket.id);
+        const left = (checksByIp.get(ip) ?? 1) - 1;
+        if (left > 0) checksByIp.set(ip, left);
+        else checksByIp.delete(ip);
+      });
+  });
+
+  const invited = (ack: (r: Ack<JoinResult>) => void): boolean => {
+    if (isTrusted(socket.id)) return true;
+    ack({ ok: false, error: 'Playing with friends is invite only. Enter an invite code first.' });
+    return false;
+  };
 
   const currentRoom = (): Room | undefined => {
     const code = roomOfSocket.get(socket.id);
@@ -100,12 +175,13 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     room.onChat = (msg, recipients) => {
       for (const id of recipients) io.to(id).emit('chat', msg);
     };
+    room.isTrusted = isTrusted;
     rooms.set(room.code, room);
     return room;
   };
 
   socket.on('room:create', (payload, ack) => {
-    if (typeof ack !== 'function') return;
+    if (typeof ack !== 'function' || !invited(ack)) return;
     const name = cleanName(payload?.name);
     if (!name) return ack({ ok: false, error: 'Enter a name first.' });
     enter(createRoom(), name, ack);
@@ -122,7 +198,7 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
   });
 
   socket.on('room:join', (payload, ack) => {
-    if (typeof ack !== 'function') return;
+    if (typeof ack !== 'function' || !invited(ack)) return;
     const name = cleanName(payload?.name);
     const code = String(payload?.code ?? '').trim().toUpperCase();
     if (!name) return ack({ ok: false, error: 'Enter a name first.' });
@@ -218,8 +294,10 @@ setInterval(() => {
 }, 1000 / TICK_RATE);
 
 setInterval(() => {
-  const cutoff = Date.now() - IDLE_MS;
+  const now = Date.now();
+  const cutoff = now - IDLE_MS;
   for (const [id, at] of lastActive) if (at < cutoff) io.sockets.sockets.get(id)?.disconnect(true);
+  for (const [ip, entry] of unlockTries) if (now >= entry.resetAt) unlockTries.delete(ip);
 }, Math.min(30_000, IDLE_MS));
 
 // In production the server also hosts the built client.
@@ -229,4 +307,6 @@ if (existsSync(clientDir)) {
   app.get('/{*path}', (_req, res) => res.sendFile('index.html', { root: clientDir }));
 }
 
-httpServer.listen(PORT, () => console.log(`Abyss Station server on :${PORT}`));
+httpServer.listen(PORT, () =>
+  console.log(`Abyss Station server on :${PORT} (${invitesRequired ? 'invite codes required for multiplayer and AI chat' : 'local dev, no ABYSS_VERIFY_TOKEN: everything unlocked'})`),
+);

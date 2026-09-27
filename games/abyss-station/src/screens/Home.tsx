@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { NAME_MAX_LENGTH } from '../../shared/constants';
 import { socket } from '../socket';
+import { unlock } from '../access';
+import { track, type GameEvent } from '../analytics';
 
 const NAME_KEY = 'abyss.name';
 
@@ -23,19 +25,40 @@ function saveName(name: string): void {
 interface Props {
   connected: boolean;
   dropped: boolean; // closed by the server for idling; no auto-reconnect
+  trusted: boolean; // has the access code: may play with friends
+  onUnlocked: () => void;
   notice: string;
   onClearNotice: () => void;
 }
 
-export function Home({ connected, dropped, notice, onClearNotice }: Props) {
+export function Home({ connected, dropped, trusted, onUnlocked, notice, onClearNotice }: Props) {
   const [name, setName] = useState(loadName);
   const [code, setCode] = useState('');
+  const [access, setAccess] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const handle = (r: { ok: true } | { ok: false; error: string }) => {
+  const submitAccess = (e: FormEvent) => {
+    e.preventDefault();
+    onClearNotice();
+    setError('');
+    setBusy(true);
+    unlock(access, (err) => {
+      setBusy(false);
+      track(err ? 'invite_rejected' : 'invite_unlocked');
+      if (err) setError(err);
+      else {
+        setAccess('');
+        onUnlocked();
+      }
+    });
+  };
+
+  // Counts only what actually started, not every click.
+  const handle = (event: GameEvent) => (r: { ok: true } | { ok: false; error: string }) => {
     setBusy(false);
-    if (!r.ok) setError(r.error);
+    if (r.ok) track(event);
+    else setError(r.error);
   };
 
   const create = () => {
@@ -43,7 +66,7 @@ export function Home({ connected, dropped, notice, onClearNotice }: Props) {
     setError('');
     saveName(name);
     setBusy(true);
-    socket.emit('room:create', { name }, handle);
+    socket.emit('room:create', { name }, handle('host_room'));
   };
 
   const solo = () => {
@@ -51,7 +74,7 @@ export function Home({ connected, dropped, notice, onClearNotice }: Props) {
     setError('');
     if (name.trim()) saveName(name);
     setBusy(true);
-    socket.emit('room:solo', { name }, handle);
+    socket.emit('room:solo', { name }, handle('play_vs_bots'));
   };
 
   const join = (e: FormEvent) => {
@@ -60,7 +83,7 @@ export function Home({ connected, dropped, notice, onClearNotice }: Props) {
     setError('');
     saveName(name);
     setBusy(true);
-    socket.emit('room:join', { name, code }, handle);
+    socket.emit('room:join', { name, code }, handle('join_room'));
   };
 
   const disabled = !connected || busy || !name.trim();
@@ -95,26 +118,54 @@ export function Home({ connected, dropped, notice, onClearNotice }: Props) {
           <span>or play with friends</span>
         </div>
 
-        <button className="btn" onClick={create} disabled={disabled}>
-          Host a new dive
-        </button>
+        {trusted ? (
+          <>
+            <button className="btn" onClick={create} disabled={disabled}>
+              Host a new dive
+            </button>
 
-        <div className="divider">
-          <span>or join with a code</span>
-        </div>
+            <div className="divider">
+              <span>or join with a code</span>
+            </div>
 
-        <form className="join" onSubmit={join}>
-          <input
-            className="code-input"
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4))}
-            placeholder="CODE"
-            aria-label="Station code"
-          />
-          <button className="btn" type="submit" disabled={disabled || code.length !== 4}>
-            Join
-          </button>
-        </form>
+            <form className="join" onSubmit={join}>
+              <input
+                className="code-input"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4))}
+                placeholder="CODE"
+                aria-label="Station code"
+              />
+              <button className="btn" type="submit" disabled={disabled || code.length !== 4}>
+                Join
+              </button>
+            </form>
+          </>
+        ) : (
+          <>
+            <p className="hint center">
+              <strong>Want the full experience?</strong> Multiplayer with friends, plus AI divers that argue, accuse
+              and lie in meetings. It's invite only:{' '}
+              <a href="https://eonelabs.my/#contact" target="_blank" rel="noopener">
+                contact Ikhwan
+              </a>{' '}
+              for a code.
+            </p>
+            <form className="join" onSubmit={submitAccess}>
+              <input
+                value={access}
+                onChange={(e) => setAccess(e.target.value)}
+                placeholder="XXXX-XXXX-XXXX"
+                aria-label="Invite code"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button className="btn" type="submit" disabled={!connected || busy || !access.trim()}>
+                Unlock
+              </button>
+            </form>
+          </>
+        )}
 
         {!connected &&
           (dropped ? (

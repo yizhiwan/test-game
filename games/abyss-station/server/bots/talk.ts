@@ -36,8 +36,9 @@ const RULES = `You are playing Abyss Station, a social deduction game like Among
 Divers (the crew) repair the station. One or two Mimics, creatures wearing crewmates' faces, secretly kill divers.
 A meeting is happening: everyone chats, then votes someone out the moon pool (or skips).`;
 
-export async function botLine(ctx: TalkContext): Promise<string> {
-  if (!hasApiKey()) return ctx.fallback;
+/** `useModel` is false for public rooms, so strangers never spend the key's quota. */
+export async function botLine(ctx: TalkContext, useModel: boolean): Promise<string> {
+  if (!useModel || !hasApiKey()) return ctx.fallback;
   const goal =
     ctx.role === 'mimic'
       ? `You are SECRETLY a Mimic${ctx.partners.length ? ` (your partner: ${ctx.partners.join(', ')})` : ''}. Never admit it. Blend in, give a believable alibi, and steer suspicion onto a diver without overdoing it. Never accuse your partner.`

@@ -114,6 +114,8 @@ export class Room {
   stateDirty = false;
   /** Delivers chat lines; wired to Socket.IO by the server. */
   onChat: (msg: ChatMessage, recipients: string[]) => void = () => {};
+  /** Whether a player has entered the access code; wired up by the server. */
+  isTrusted: (id: string) => boolean = () => false;
 
   constructor(
     readonly code: string,
@@ -131,6 +133,11 @@ export class Room {
 
   get humanCount(): number {
     return [...this.players.values()].filter((p) => !p.bot).length;
+  }
+
+  /** Gemini bot chat only runs while someone with the access code is aboard. */
+  get aiChat(): boolean {
+    return [...this.players.values()].some((p) => !p.bot && this.isTrusted(p.id));
   }
 
   addBot(): boolean {
