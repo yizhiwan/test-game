@@ -30,6 +30,11 @@ const MIN_PLAYERS = Math.max(2, Number(process.env.ABYSS_MIN_PLAYERS) || MIN_PLA
 // Six divers in all: one Mimic, and enough crew for meetings to matter.
 const SOLO_BOTS = 5;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O: too easy to misread
+// Cloud Run bills for as long as a socket is open, and Socket.IO reconnects on
+// its own, so a forgotten tab would keep the instance up for good. Sockets that
+// send nothing for this long are dropped; the client doesn't auto-reconnect
+// after a server-side disconnect. Lower it to test, e.g. ABYSS_IDLE_MS=15000.
+const IDLE_MS = Math.max(10_000, Number(process.env.ABYSS_IDLE_MS) || 10 * 60_000);
 
 const app = express();
 const httpServer = createServer(app);
@@ -37,6 +42,7 @@ const io = new Server<ClientToServer, ServerToClient>(httpServer);
 
 const rooms = new Map<string, Room>();
 const roomOfSocket = new Map<string, string>();
+const lastActive = new Map<string, number>();
 
 function newCode(): string {
   for (;;) {
@@ -60,6 +66,10 @@ function broadcastState(room: Room): void {
 
 
 io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
+  lastActive.set(socket.id, Date.now());
+  socket.onAny(() => lastActive.set(socket.id, Date.now()));
+  socket.on('disconnect', () => lastActive.delete(socket.id));
+
   const currentRoom = (): Room | undefined => {
     const code = roomOfSocket.get(socket.id);
     return code ? rooms.get(code) : undefined;
@@ -206,6 +216,11 @@ setInterval(() => {
   // Anything bots did this tick (or that update() flagged) goes out now.
   for (const room of rooms.values()) if (room.stateDirty) broadcastState(room);
 }, 1000 / TICK_RATE);
+
+setInterval(() => {
+  const cutoff = Date.now() - IDLE_MS;
+  for (const [id, at] of lastActive) if (at < cutoff) io.sockets.sockets.get(id)?.disconnect(true);
+}, Math.min(30_000, IDLE_MS));
 
 // In production the server also hosts the built client.
 const clientDir = fileURLToPath(new URL('../client', import.meta.url));
