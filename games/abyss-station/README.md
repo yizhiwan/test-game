@@ -76,6 +76,21 @@ lines built from the same facts, so they still make accusations and alibis:
 cp .env.example .env   # then paste a free key from https://aistudio.google.com/apikey
 ```
 
+## Access code
+
+With `ABYSS_ACCESS_CODE` set, the game is invite-only where it costs you:
+
+- **Anyone** can press **Play vs bots**, but in their rooms the bots use
+  canned lines, so strangers never spend the Gemini key's quota.
+- **Hosting or joining a room** needs the access code. Friends enter it once
+  on the title screen; the browser remembers it and re-sends it on every
+  connection, and the server checks it each time.
+- **Gemini bot chat** runs only while someone with the code is in the room.
+- Wrong codes are limited to 10 per IP per 10 minutes. To revoke access,
+  change the code; everyone re-enters the new one.
+
+Leave it unset for local development and everything is unlocked.
+
 ## Run it
 
 ```bash
@@ -141,8 +156,11 @@ player, so a round would drop you mid-game.
 ```bash
 gcloud run deploy abyss-station --source . --max-instances 1 --session-affinity \
   --timeout 3600 \
-  --set-secrets GOOGLE_GENERATIVE_AI_API_KEY=GOOGLE_GENERATIVE_AI_API_KEY:latest   # optional, for bot chat
+  --set-secrets GOOGLE_GENERATIVE_AI_API_KEY=GOOGLE_GENERATIVE_AI_API_KEY:latest,ABYSS_ACCESS_CODE=ABYSS_ACCESS_CODE:latest
 ```
+
+Both secrets are optional: without the key bots use canned lines, and without
+the access code the game is fully open (see **Access code**).
 
 Cloud Run bills while any socket is open, so the server closes sockets that
 have sent nothing for 10 minutes (`ABYSS_IDLE_MS` to change it). The client

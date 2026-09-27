@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ChatMessage, RoomState } from '../shared/protocol';
 import { socket } from './socket';
+import { savedAccessCode, unlock } from './access';
 import { MuteButton } from './MuteButton';
 import { setMuted, isMuted } from './audio';
 import { useSoundCues } from './useSoundCues';
@@ -24,6 +25,7 @@ function Station() {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [connected, setConnected] = useState(socket.connected);
   const [dropped, setDropped] = useState(false);
+  const [trusted, setTrusted] = useState(false);
   const [notice, setNotice] = useState('');
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [introSeen, setIntroSeen] = useState(0);
@@ -31,13 +33,17 @@ function Station() {
   useEffect(() => {
     const onState = (s: RoomState) => setRoom(s);
     const onChat = (m: ChatMessage) => setChat((prev) => [...prev.slice(-99), m]);
+    // Access is per connection, so every (re)connect re-sends the saved code.
+    const restoreAccess = () => unlock(savedAccessCode(), (error) => setTrusted(!error));
     const onConnect = () => {
       setConnected(true);
       setDropped(false);
+      restoreAccess();
     };
     // The server drops us from the room on disconnect, so start over.
     const onDisconnect = (reason: string) => {
       setConnected(false);
+      setTrusted(false);
       // Only the server's idle sweep disconnects on purpose, and Socket.IO
       // won't retry that one: the player has to press Reconnect.
       const idle = reason === 'io server disconnect';
@@ -54,6 +60,7 @@ function Station() {
     socket.on('disconnect', onDisconnect);
     // The socket may have connected before these listeners were attached.
     setConnected(socket.connected);
+    if (socket.connected) restoreAccess();
     return () => {
       socket.off('room:state', onState);
       socket.off('chat', onChat);
@@ -87,6 +94,8 @@ function Station() {
         chat={chat}
         connected={connected}
         dropped={dropped}
+        trusted={trusted}
+        onUnlocked={() => setTrusted(true)}
         notice={notice}
         introSeen={introSeen}
         onClearNotice={() => setNotice('')}
@@ -104,6 +113,8 @@ interface ScreenProps {
   chat: ChatMessage[];
   connected: boolean;
   dropped: boolean;
+  trusted: boolean;
+  onUnlocked: () => void;
   notice: string;
   introSeen: number;
   onClearNotice: () => void;
@@ -111,8 +122,19 @@ interface ScreenProps {
   onIntroDone: () => void;
 }
 
-function Screen({ room, selfId, chat, connected, dropped, notice, introSeen, onClearNotice, onLeave: leave, onIntroDone: finishIntro }: ScreenProps) {
-  if (!room) return <Home connected={connected} dropped={dropped} notice={notice} onClearNotice={onClearNotice} />;
+function Screen({ room, selfId, chat, connected, dropped, trusted, onUnlocked, notice, introSeen, onClearNotice, onLeave: leave, onIntroDone: finishIntro }: ScreenProps) {
+  if (!room) {
+    return (
+      <Home
+        connected={connected}
+        dropped={dropped}
+        trusted={trusted}
+        onUnlocked={onUnlocked}
+        notice={notice}
+        onClearNotice={onClearNotice}
+      />
+    );
+  }
   switch (room.phase) {
     case 'lobby':
       return <Lobby room={room} selfId={selfId} onLeave={leave} />;

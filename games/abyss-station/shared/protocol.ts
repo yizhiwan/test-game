@@ -144,6 +144,8 @@ export interface ClientToServer {
   'vent:enter': () => void;
   'vent:move': (ventId: string) => void;
   'vent:exit': () => void;
+  /** Unlocks multiplayer and AI bot chat for this connection. */
+  'access:unlock': (code: string, ack: (r: Ack) => void) => void;
 }
 
 export interface ServerToClient {

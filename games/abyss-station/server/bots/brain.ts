@@ -408,7 +408,7 @@ export class BotBrain {
       this.speaking = true;
       this.linesLeft--;
       const ctx = this.talkContext(m);
-      void botLine(ctx)
+      void botLine(ctx, this.room.aiChat)
         .then((line) => {
           const cur = this.room.meeting;
           if (cur?.id === m.id && cur.stage !== 'result') this.room.postChat(this.id, line, CHAT_MIN_INTERVAL_MS);

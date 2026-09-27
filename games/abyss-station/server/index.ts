@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +36,12 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O: too easy to misr
 // send nothing for this long are dropped; the client doesn't auto-reconnect
 // after a server-side disconnect. Lower it to test, e.g. ABYSS_IDLE_MS=15000.
 const IDLE_MS = Math.max(10_000, Number(process.env.ABYSS_IDLE_MS) || 10 * 60_000);
+// Playing with friends and Gemini bot chat need this code; Play vs bots with
+// canned lines stays public, so strangers never spend the key's quota.
+// Unset (local dev) unlocks everything.
+const ACCESS_CODE = (process.env.ABYSS_ACCESS_CODE ?? '').trim();
+const UNLOCK_TRIES = 10; // per client IP per window, against guessing
+const UNLOCK_WINDOW_MS = 10 * 60_000;
 
 const app = express();
 const httpServer = createServer(app);
@@ -43,6 +50,36 @@ const io = new Server<ClientToServer, ServerToClient>(httpServer);
 const rooms = new Map<string, Room>();
 const roomOfSocket = new Map<string, string>();
 const lastActive = new Map<string, number>();
+const trusted = new Set<string>();
+const unlockTries = new Map<string, { count: number; resetAt: number }>();
+
+const isTrusted = (id: string): boolean => !ACCESS_CODE || trusted.has(id);
+
+const digest = (s: string): Buffer => createHash('sha256').update(s).digest();
+function codeMatches(input: string): boolean {
+  return timingSafeEqual(digest(input.trim()), digest(ACCESS_CODE));
+}
+
+// Cloud Run appends the real client IP to X-Forwarded-For, so take the last
+// entry; earlier ones are whatever the client sent.
+function clientIp(socket: Socket): string {
+  const fwd = socket.handshake.headers['x-forwarded-for'];
+  const last = (Array.isArray(fwd) ? fwd.join(',') : fwd ?? '').split(',').pop()?.trim();
+  return last || socket.handshake.address;
+}
+
+// Only wrong codes count, so friends on one home connection don't lock each other out.
+function unlockBlocked(ip: string): boolean {
+  const entry = unlockTries.get(ip);
+  if (entry && Date.now() >= entry.resetAt) unlockTries.delete(ip);
+  return (unlockTries.get(ip)?.count ?? 0) >= UNLOCK_TRIES;
+}
+
+function recordWrongCode(ip: string): void {
+  const entry = unlockTries.get(ip);
+  if (entry) entry.count++;
+  else unlockTries.set(ip, { count: 1, resetAt: Date.now() + UNLOCK_WINDOW_MS });
+}
 
 function newCode(): string {
   for (;;) {
@@ -68,7 +105,32 @@ function broadcastState(room: Room): void {
 io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
   lastActive.set(socket.id, Date.now());
   socket.onAny(() => lastActive.set(socket.id, Date.now()));
-  socket.on('disconnect', () => lastActive.delete(socket.id));
+  socket.on('disconnect', () => {
+    lastActive.delete(socket.id);
+    trusted.delete(socket.id);
+  });
+
+  socket.on('access:unlock', (raw, ack) => {
+    if (typeof ack !== 'function') return;
+    if (isTrusted(socket.id)) return ack({ ok: true });
+    // The client sends its saved code (maybe none) on every connect; an empty
+    // one isn't a guess, so it doesn't count against the limit.
+    if (!String(raw ?? '').trim()) return ack({ ok: false, error: 'Enter an access code.' });
+    const ip = clientIp(socket);
+    if (unlockBlocked(ip)) return ack({ ok: false, error: 'Too many tries. Wait a few minutes.' });
+    if (!codeMatches(String(raw ?? ''))) {
+      recordWrongCode(ip);
+      return ack({ ok: false, error: "That code didn't work." });
+    }
+    trusted.add(socket.id);
+    ack({ ok: true });
+  });
+
+  const invited = (ack: (r: Ack<JoinResult>) => void): boolean => {
+    if (isTrusted(socket.id)) return true;
+    ack({ ok: false, error: 'Playing with friends is invite-only. Enter an access code first.' });
+    return false;
+  };
 
   const currentRoom = (): Room | undefined => {
     const code = roomOfSocket.get(socket.id);
@@ -100,12 +162,13 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     room.onChat = (msg, recipients) => {
       for (const id of recipients) io.to(id).emit('chat', msg);
     };
+    room.isTrusted = isTrusted;
     rooms.set(room.code, room);
     return room;
   };
 
   socket.on('room:create', (payload, ack) => {
-    if (typeof ack !== 'function') return;
+    if (typeof ack !== 'function' || !invited(ack)) return;
     const name = cleanName(payload?.name);
     if (!name) return ack({ ok: false, error: 'Enter a name first.' });
     enter(createRoom(), name, ack);
@@ -122,7 +185,7 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
   });
 
   socket.on('room:join', (payload, ack) => {
-    if (typeof ack !== 'function') return;
+    if (typeof ack !== 'function' || !invited(ack)) return;
     const name = cleanName(payload?.name);
     const code = String(payload?.code ?? '').trim().toUpperCase();
     if (!name) return ack({ ok: false, error: 'Enter a name first.' });
@@ -229,4 +292,6 @@ if (existsSync(clientDir)) {
   app.get('/{*path}', (_req, res) => res.sendFile('index.html', { root: clientDir }));
 }
 
-httpServer.listen(PORT, () => console.log(`Abyss Station server on :${PORT}`));
+httpServer.listen(PORT, () =>
+  console.log(`Abyss Station server on :${PORT} (${ACCESS_CODE ? 'access code required for multiplayer and AI chat' : 'no access code: everything unlocked'})`),
+);
