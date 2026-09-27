@@ -1,4 +1,3 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +14,7 @@ import { sanitizeInput } from '../shared/physics.js';
 import type { SabotageKind } from '../shared/sabotage.js';
 import { TASKS_PER_DIVER } from '../shared/tasks.js';
 import type { Ack, ClientToServer, JoinResult, ServerToClient } from '../shared/protocol.js';
+import { checkInvite, invitesRequired } from './invites.js';
 import { Room } from './room.js';
 
 // Local secrets (GOOGLE_GENERATIVE_AI_API_KEY) from .env, if present.
@@ -36,11 +36,10 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O: too easy to misr
 // send nothing for this long are dropped; the client doesn't auto-reconnect
 // after a server-side disconnect. Lower it to test, e.g. ABYSS_IDLE_MS=15000.
 const IDLE_MS = Math.max(10_000, Number(process.env.ABYSS_IDLE_MS) || 10 * 60_000);
-// Playing with friends and Gemini bot chat need this code; Play vs bots with
-// canned lines stays public, so strangers never spend the key's quota.
-// Unset (local dev) unlocks everything.
-const ACCESS_CODE = (process.env.ABYSS_ACCESS_CODE ?? '').trim();
-const UNLOCK_TRIES = 10; // per client IP per window, against guessing
+// Playing with friends and Gemini bot chat need an invite code (see
+// invites.ts); Play vs bots with canned lines stays public, so strangers never
+// spend the key's quota. This local limit sits in front of eonelabs.my's own.
+const UNLOCK_TRIES = 10; // wrong codes per client IP per window
 const UNLOCK_WINDOW_MS = 10 * 60_000;
 
 const app = express();
@@ -51,14 +50,10 @@ const rooms = new Map<string, Room>();
 const roomOfSocket = new Map<string, string>();
 const lastActive = new Map<string, number>();
 const trusted = new Set<string>();
+const checking = new Set<string>(); // sockets with a code check in flight
 const unlockTries = new Map<string, { count: number; resetAt: number }>();
 
-const isTrusted = (id: string): boolean => !ACCESS_CODE || trusted.has(id);
-
-const digest = (s: string): Buffer => createHash('sha256').update(s).digest();
-function codeMatches(input: string): boolean {
-  return timingSafeEqual(digest(input.trim()), digest(ACCESS_CODE));
-}
+const isTrusted = (id: string): boolean => !invitesRequired || trusted.has(id);
 
 // Cloud Run appends the real client IP to X-Forwarded-For, so take the last
 // entry; earlier ones are whatever the client sent.
@@ -115,20 +110,26 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     if (isTrusted(socket.id)) return ack({ ok: true });
     // The client sends its saved code (maybe none) on every connect; an empty
     // one isn't a guess, so it doesn't count against the limit.
-    if (!String(raw ?? '').trim()) return ack({ ok: false, error: 'Enter an access code.' });
+    if (!String(raw ?? '').trim()) return ack({ ok: false, error: 'Enter an invite code.' });
+    if (checking.has(socket.id)) return ack({ ok: false, error: 'Still checking your code…' });
     const ip = clientIp(socket);
-    if (unlockBlocked(ip)) return ack({ ok: false, error: 'Too many tries. Wait a few minutes.' });
-    if (!codeMatches(String(raw ?? ''))) {
-      recordWrongCode(ip);
-      return ack({ ok: false, error: "That code didn't work." });
-    }
-    trusted.add(socket.id);
-    ack({ ok: true });
+    if (unlockBlocked(ip)) return ack({ ok: false, error: 'Too many tries. Wait a while and try again.' });
+    checking.add(socket.id);
+    void checkInvite(String(raw), ip)
+      .then((r) => {
+        if (r.ok) {
+          if (socket.connected) trusted.add(socket.id);
+          return ack({ ok: true });
+        }
+        if (r.wrong) recordWrongCode(ip);
+        ack({ ok: false, error: r.error });
+      })
+      .finally(() => checking.delete(socket.id));
   });
 
   const invited = (ack: (r: Ack<JoinResult>) => void): boolean => {
     if (isTrusted(socket.id)) return true;
-    ack({ ok: false, error: 'Playing with friends is invite-only. Enter an access code first.' });
+    ack({ ok: false, error: 'Playing with friends is invite only. Enter an invite code first.' });
     return false;
   };
 
@@ -293,5 +294,5 @@ if (existsSync(clientDir)) {
 }
 
 httpServer.listen(PORT, () =>
-  console.log(`Abyss Station server on :${PORT} (${ACCESS_CODE ? 'access code required for multiplayer and AI chat' : 'no access code: everything unlocked'})`),
+  console.log(`Abyss Station server on :${PORT} (${invitesRequired ? 'invite codes required for multiplayer and AI chat' : 'no ABYSS_VERIFY_TOKEN: everything unlocked'})`),
 );

@@ -139,15 +139,22 @@ export function Home({ connected, dropped, trusted, onUnlocked, notice, onClearN
           </>
         ) : (
           <>
-            <p className="hint center">Multiplayer is invite-only. Enter the access code you were given.</p>
+            <p className="hint center">
+              <strong>Want the full experience?</strong> Multiplayer with friends, plus AI divers that argue, accuse
+              and lie in meetings. It's invite only:{' '}
+              <a href="https://eonelabs.my/#contact" target="_blank" rel="noopener">
+                contact Ikhwan
+              </a>{' '}
+              for a code.
+            </p>
             <form className="join" onSubmit={submitAccess}>
               <input
-                type="password"
                 value={access}
                 onChange={(e) => setAccess(e.target.value)}
-                placeholder="Access code"
-                aria-label="Access code"
+                placeholder="XXXX-XXXX-XXXX"
+                aria-label="Invite code"
                 autoComplete="off"
+                spellCheck={false}
               />
               <button className="btn" type="submit" disabled={!connected || busy || !access.trim()}>
                 Unlock

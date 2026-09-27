@@ -76,20 +76,27 @@ lines built from the same facts, so they still make accusations and alibis:
 cp .env.example .env   # then paste a free key from https://aistudio.google.com/apikey
 ```
 
-## Access code
+## Invite codes
 
-With `ABYSS_ACCESS_CODE` set, the game is invite-only where it costs you:
+The full game is invite only, per friend:
 
 - **Anyone** can press **Play vs bots**, but in their rooms the bots use
-  canned lines, so strangers never spend the Gemini key's quota.
-- **Hosting or joining a room** needs the access code. Friends enter it once
-  on the title screen; the browser remembers it and re-sends it on every
-  connection, and the server checks it each time.
-- **Gemini bot chat** runs only while someone with the code is in the room.
-- Wrong codes are limited to 10 per IP per 10 minutes. To revoke access,
-  change the code; everyone re-enters the new one.
+  canned lines, so strangers never spend the Gemini key's quota. The title
+  screen tells them to ask Ikhwan for a code for the full experience.
+- **Hosting or joining a room** needs an invite code. Friends enter it once;
+  the browser remembers it and re-sends it on every connection.
+- **Gemini bot chat** runs only while someone with a code is in the room.
+- Codes are created, labelled, expired and revoked per friend at
+  `eonelabs.my/admin/ai-codes` (game: **Abyss Station**), separate from the
+  Prompt Engineer codes. No daily limit applies to Abyss codes.
+- The server checks each code with eonelabs.my (`server/invites.ts`), using
+  `ABYSS_VERIFY_TOKEN` and forwarding the player's IP, so eonelabs.my's
+  guessing limit applies per player. A local limit of 10 wrong codes per IP
+  per 10 minutes sits in front. If eonelabs.my can't be reached, unlocking
+  fails and the game stays in public mode.
 
-Leave it unset for local development and everything is unlocked.
+Leave `ABYSS_VERIFY_TOKEN` unset for local development and everything is
+unlocked.
 
 ## Run it
 
@@ -156,11 +163,12 @@ player, so a round would drop you mid-game.
 ```bash
 gcloud run deploy abyss-station --source . --max-instances 1 --session-affinity \
   --timeout 3600 \
-  --set-secrets GOOGLE_GENERATIVE_AI_API_KEY=GOOGLE_GENERATIVE_AI_API_KEY:latest,ABYSS_ACCESS_CODE=ABYSS_ACCESS_CODE:latest
+  --set-secrets GOOGLE_GENERATIVE_AI_API_KEY=GOOGLE_GENERATIVE_AI_API_KEY:latest,ABYSS_VERIFY_TOKEN=ABYSS_VERIFY_TOKEN:latest
 ```
 
 Both secrets are optional: without the key bots use canned lines, and without
-the access code the game is fully open (see **Access code**).
+the verify token the game is fully open (see **Invite codes**). The same
+`ABYSS_VERIFY_TOKEN` secret must be mounted on the eonelabs.my service.
 
 Cloud Run bills while any socket is open, so the server closes sockets that
 have sent nothing for 10 minutes (`ABYSS_IDLE_MS` to change it). The client

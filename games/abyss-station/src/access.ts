@@ -1,8 +1,8 @@
 import { socket } from './socket';
 
-// The access code unlocks playing with friends and Gemini bot chat. It's
+// An invite code unlocks playing with friends and Gemini bot chat. It's
 // remembered per browser so friends only type it once; the server re-checks
-// it on every connection.
+// it (with eonelabs.my) on every connection.
 const ACCESS_KEY = 'abyss.access';
 
 export function savedAccessCode(): string {
