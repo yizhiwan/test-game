@@ -5,7 +5,9 @@
  * own. The player's IP is forwarded so eonelabs.my's guessing limit applies
  * per player, not to this whole server.
  *
- * Without ABYSS_VERIFY_TOKEN (local dev) no code is needed: everything is open.
+ * Without ABYSS_VERIFY_TOKEN, local dev runs fully open. On Cloud Run (which
+ * sets K_SERVICE) a missing token fails closed instead: codes are required and
+ * none can be checked, so a lost secret never opens the game up.
  */
 
 const VERIFY_URL = process.env.ABYSS_VERIFY_URL || 'https://eonelabs.my/api/internal/abyss/verify-code';
@@ -13,7 +15,7 @@ const TOKEN = (process.env.ABYSS_VERIFY_TOKEN ?? '').trim();
 const TIMEOUT_MS = 5000;
 const MAX_CODE_LENGTH = 32; // longer than any real code, dashes included
 
-export const invitesRequired = Boolean(TOKEN);
+export const invitesRequired = Boolean(TOKEN) || Boolean(process.env.K_SERVICE);
 
 const MESSAGES: Record<string, string> = {
   invalid: "That invite code didn't work.",
@@ -27,6 +29,10 @@ export type InviteCheck = { ok: true } | { ok: false; error: string; wrong: bool
 
 export async function checkInvite(rawCode: string, ip: string): Promise<InviteCheck> {
   const code = rawCode.trim().slice(0, MAX_CODE_LENGTH);
+  if (!TOKEN) {
+    console.warn('[invites] ABYSS_VERIFY_TOKEN is not set; invite codes cannot be checked');
+    return { ok: false, error: "Invite codes can't be checked right now. Try again later.", wrong: false };
+  }
   try {
     const res = await fetch(VERIFY_URL, {
       method: 'POST',

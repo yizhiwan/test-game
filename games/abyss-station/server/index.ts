@@ -51,6 +51,8 @@ const roomOfSocket = new Map<string, string>();
 const lastActive = new Map<string, number>();
 const trusted = new Set<string>();
 const checking = new Set<string>(); // sockets with a code check in flight
+const checksByIp = new Map<string, number>(); // in-flight checks per client IP
+const MAX_CHECKS_PER_IP = 3;
 const unlockTries = new Map<string, { count: number; resetAt: number }>();
 
 const isTrusted = (id: string): boolean => !invitesRequired || trusted.has(id);
@@ -114,6 +116,11 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     if (checking.has(socket.id)) return ack({ ok: false, error: 'Still checking your code…' });
     const ip = clientIp(socket);
     if (unlockBlocked(ip)) return ack({ ok: false, error: 'Too many tries. Wait a while and try again.' });
+    // Many sockets from one IP could otherwise fire checks in parallel before
+    // a single wrong code is counted.
+    const inFlight = checksByIp.get(ip) ?? 0;
+    if (inFlight >= MAX_CHECKS_PER_IP) return ack({ ok: false, error: 'Still checking your code…' });
+    checksByIp.set(ip, inFlight + 1);
     checking.add(socket.id);
     void checkInvite(String(raw), ip)
       .then((r) => {
@@ -124,7 +131,12 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
         if (r.wrong) recordWrongCode(ip);
         ack({ ok: false, error: r.error });
       })
-      .finally(() => checking.delete(socket.id));
+      .finally(() => {
+        checking.delete(socket.id);
+        const left = (checksByIp.get(ip) ?? 1) - 1;
+        if (left > 0) checksByIp.set(ip, left);
+        else checksByIp.delete(ip);
+      });
   });
 
   const invited = (ack: (r: Ack<JoinResult>) => void): boolean => {
@@ -282,8 +294,10 @@ setInterval(() => {
 }, 1000 / TICK_RATE);
 
 setInterval(() => {
-  const cutoff = Date.now() - IDLE_MS;
+  const now = Date.now();
+  const cutoff = now - IDLE_MS;
   for (const [id, at] of lastActive) if (at < cutoff) io.sockets.sockets.get(id)?.disconnect(true);
+  for (const [ip, entry] of unlockTries) if (now >= entry.resetAt) unlockTries.delete(ip);
 }, Math.min(30_000, IDLE_MS));
 
 // In production the server also hosts the built client.
@@ -294,5 +308,5 @@ if (existsSync(clientDir)) {
 }
 
 httpServer.listen(PORT, () =>
-  console.log(`Abyss Station server on :${PORT} (${invitesRequired ? 'invite codes required for multiplayer and AI chat' : 'no ABYSS_VERIFY_TOKEN: everything unlocked'})`),
+  console.log(`Abyss Station server on :${PORT} (${invitesRequired ? 'invite codes required for multiplayer and AI chat' : 'local dev, no ABYSS_VERIFY_TOKEN: everything unlocked'})`),
 );
