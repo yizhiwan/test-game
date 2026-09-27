@@ -31,4 +31,4 @@
 package-lock.json linguist-generated=true -diff
 
 # Portfolio media is documentation, not source.
-docs/** linguist-documentation
+games/*/docs/** linguist-documentation

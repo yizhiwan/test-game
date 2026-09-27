@@ -4,8 +4,14 @@
     {
       "name": "cyberpunk-lab-404",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": ["--prefix", "games/cyberpunk-lab-404", "run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "abyss-station",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "games/abyss-station", "run", "dev"],
+      "port": 5173
     }
   ]
 }
