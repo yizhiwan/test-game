@@ -123,6 +123,7 @@ export interface JoinResult {
 
 export interface ClientToServer {
   'room:create': (p: { name: string }, ack: (r: Ack<JoinResult>) => void) => void;
+  'room:solo': (p: { name: string }, ack: (r: Ack<JoinResult>) => void) => void;
   'room:join': (p: { code: string; name: string }, ack: (r: Ack<JoinResult>) => void) => void;
   'room:leave': () => void;
   'lobby:color': (color: number) => void;

@@ -27,6 +27,8 @@ const PORT = Number(process.env.PORT) || 3001;
 // Lower for solo testing, e.g. ABYSS_MIN_PLAYERS=2 npm run dev
 const TASKS_PER = Math.max(1, Math.min(13, Number(process.env.ABYSS_TASKS) || TASKS_PER_DIVER));
 const MIN_PLAYERS = Math.max(2, Number(process.env.ABYSS_MIN_PLAYERS) || MIN_PLAYERS_TO_START);
+// Six divers in all: one Mimic, and enough crew for meetings to matter.
+const SOLO_BOTS = 5;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I or O: too easy to misread
 
 const app = express();
@@ -82,17 +84,31 @@ io.on('connection', (socket: Socket<ClientToServer, ServerToClient>) => {
     broadcastState(room);
   };
 
-  socket.on('room:create', (payload, ack) => {
-    if (typeof ack !== 'function') return;
-    const name = cleanName(payload?.name);
-    if (!name) return ack({ ok: false, error: 'Enter a name first.' });
+  const createRoom = (): Room => {
     leave();
     const room = new Room(newCode(), MIN_PLAYERS, TASKS_PER);
     room.onChat = (msg, recipients) => {
       for (const id of recipients) io.to(id).emit('chat', msg);
     };
     rooms.set(room.code, room);
-    enter(room, name, ack);
+    return room;
+  };
+
+  socket.on('room:create', (payload, ack) => {
+    if (typeof ack !== 'function') return;
+    const name = cleanName(payload?.name);
+    if (!name) return ack({ ok: false, error: 'Enter a name first.' });
+    enter(createRoom(), name, ack);
+  });
+
+  // One click from the title screen: a private room, a crew of bots, and go.
+  socket.on('room:solo', (payload, ack) => {
+    if (typeof ack !== 'function') return;
+    const room = createRoom();
+    enter(room, cleanName(payload?.name) || 'Diver', ack);
+    for (let i = 0; i < SOLO_BOTS; i++) room.addBot();
+    room.start();
+    broadcastState(room);
   });
 
   socket.on('room:join', (payload, ack) => {

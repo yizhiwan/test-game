@@ -63,8 +63,8 @@ add a free [Gemini API key](https://aistudio.google.com/apikey) to the game's
 env file (`.env.local` for Lab 404, `.env` for Abyss Station). Each game has a
 `.env.example` to copy.
 
-**Playing Abyss Station solo:** host a dive, press **+ Bot** three times, then
-**Start dive**.
+**Playing Abyss Station solo:** click **Play vs bots** on the title screen. It
+drops you into a round with five AI divers, one of whom is a Mimic.
 
 ## Scripts
 

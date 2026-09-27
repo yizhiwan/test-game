@@ -49,8 +49,10 @@ that came up from the trench is wearing one of their faces.
 
 ## AI bots
 
-The host can add bots in the lobby (**+ Bot**) to fill empty seats, or to
-play solo against a full crew. Bots are marked with a *bot* tag.
+**Play vs bots** on the title screen starts a solo round right away: you and
+five bots, one of them a Mimic. In a normal lobby the host can also add or
+remove bots (**+ Bot** / **− Bot**) to fill empty seats. Bots are marked with a
+*bot* tag.
 
 - **Diver bots** find their way between rooms, do their tasks at a human
   pace, report bodies they see, fix sabotage (splitting up across panels, and
@@ -81,8 +83,8 @@ npm install
 npm run dev        # server on :3001, client on http://localhost:5173
 ```
 
-A round needs 4 players, and bots count, so the quickest solo game is to host
-and press **+ Bot** three times. To test with only humans instead, lower the
+A round needs 4 players, and bots count, so the quickest solo game is the
+**Play vs bots** button. To test with only humans instead, lower the
 minimum and open two browser windows, hosting in one and joining with the
 4-letter code in the other:
 
