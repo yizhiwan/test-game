@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { JetBrains_Mono, Inter } from "next/font/google";
 import AppShell from "@/components/AppShell";
 import "./globals.css";
@@ -40,6 +41,14 @@ export default function RootLayout({
     >
       <body className="bg-bg-deep text-white font-mono">
         <AppShell>{children}</AppShell>
+        {/* Google Analytics (same GA4 property as eonelabs.my) */}
+        <Script src="https://www.googletagmanager.com/gtag/js?id=G-RLEP9S0YYD" strategy="afterInteractive" />
+        <Script id="ga-init" strategy="afterInteractive">
+          {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-RLEP9S0YYD');`}
+        </Script>
       </body>
     </html>
   );
