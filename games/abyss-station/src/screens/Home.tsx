@@ -183,6 +183,13 @@ export function Home({ connected, dropped, trusted, onUnlocked, notice, onClearN
           ))}
         {(error || notice) && <p className="error">{error || notice}</p>}
       </section>
+
+      <p className="hint center">
+        A project by Ikhwan Azmi ·{' '}
+        <a href="https://eonelabs.my" target="_blank" rel="noopener">
+          eonelabs.my
+        </a>
+      </p>
     </main>
   );
 }
